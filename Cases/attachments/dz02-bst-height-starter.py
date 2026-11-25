@@ -12,9 +12,11 @@
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import statistics
 import time
+from collections import deque
 
 # ---------------------------------------------------------------------------
 # 1. Узел и итеративная вставка
@@ -40,8 +42,24 @@ def insert_iter(root: Node | None, key: int) -> Node:
 
     Дубликаты игнорируются (ключи в эксперименте уникальны).
     """
-    # TODO: спуститься от корня циклом до свободной позиции и подвесить узел
-    raise NotImplementedError
+    new_node = Node(key)
+    if root is None:
+        return new_node
+    
+    curr = root
+    while True:
+        if key < curr.key:
+            if curr.left is None:
+                curr.left = new_node
+                return root
+            curr = curr.left
+        elif key > curr.key:
+            if curr.right is None:
+                curr.right = new_node
+                return root
+            curr = curr.right
+        else:
+            return root
 
 
 def build_bst(keys: list[int]) -> Node | None:
@@ -63,33 +81,84 @@ def tree_height(root: Node | None) -> int:
     Пустое дерево: -1; один узел: 0. Реализовать итеративно
     (обход в ширину или в глубину с явным стеком/очередью).
     """
-    # TODO: реализовать итеративный обход с отслеживанием глубины
-    raise NotImplementedError
+    if root is None:
+        return -1
+    
+    max_depth = -1
+    queue = deque([(root, 0)])
+    
+    while queue:
+        node, depth = queue.popleft()
+        if depth > max_depth:
+            max_depth = depth
+        
+        if node.left:
+            queue.append((node.left, depth + 1))
+        if node.right:
+            queue.append((node.right, depth + 1))
+            
+    return max_depth
 
 
 def sum_depths(root: Node | None) -> int:
     """Сумма глубин всех узлов (глубина корня — 0). Итеративно."""
-    # TODO: обойти дерево, накапливая глубину каждого узла
-    raise NotImplementedError
+    if root is None:
+        return 0
+    
+    total = 0
+    stack = [(root, 0)]
+    
+    while stack:
+        node, d = stack.pop()
+        total += d
+        if node.right:
+            stack.append((node.right, d + 1))
+        if node.left:
+            stack.append((node.left, d + 1))
+            
+    return total
 
 
 def count_nodes(root: Node | None) -> int:
     """Число узлов дерева. Итеративно."""
-    # TODO: реализовать подсчёт узлов
-    raise NotImplementedError
+    if root is None:
+        return 0
+    
+    cnt = 0
+    stack = [root]
+    
+    while stack:
+        node = stack.pop()
+        cnt += 1
+        if node.right:
+            stack.append(node.right)
+        if node.left:
+            stack.append(node.left)
+            
+    return cnt
 
 
 def avg_depth(root: Node | None) -> float:
     """Средняя глубина узла: sum_depths / count_nodes (0.0 для пустого)."""
-    # TODO: выразить через sum_depths и count_nodes, обработать пустое дерево
-    raise NotImplementedError
+    n = count_nodes(root)
+    return sum_depths(root) / n if n > 0 else 0.0
 
 
 def inorder_keys(root: Node | None) -> list[int]:
     """Ключи in-order-обхода (итеративно, с явным стеком) — для верификации."""
-    # TODO: реализовать итеративный in-order
-    raise NotImplementedError
-
+    result = []
+    stack = []
+    curr = root
+    
+    while curr or stack:
+        while curr:
+            stack.append(curr)
+            curr = curr.left
+        curr = stack.pop()
+        result.append(curr.key)
+        curr = curr.right
+        
+    return result
 
 # ---------------------------------------------------------------------------
 # 3. Верификация (шаги 1–3 методики docs/ai-verification.md)
@@ -166,16 +235,31 @@ def bench_search(root: Node | None, queries: list[int]) -> float:
 def run_experiment(seed: int) -> None:
     """Таблица: n, высота и средняя глубина для двух потоков, опорные величины."""
     rng = random.Random(seed)
-    header = (f"{'n':>7} {'h_случ':>8} {'d_случ':>8} "
-              f"{'h_упор':>8} {'d_упор':>8} {'log2(n)':>8}")
+    
+    header = (f"{'n':>7} | {'h_rand':>8} {'d_rand':>8} | "
+              f"{'h_ord':>8} {'d_ord':>8} | {'log2(n)':>8}")
     print(header)
-    import math
+    print("-" * len(header))
+    
     for n in SIZES:
         root_rand = build_bst(random_keys(n, rng))
         root_ord = build_bst(ordered_keys(n))
-        print(f"{n:>7} {tree_height(root_rand):>8} "
-              f"{avg_depth(root_rand):>8.1f} {tree_height(root_ord):>8} "
-              f"{avg_depth(root_ord):>8.1f} {math.log2(n):>8.1f}")
+        h_r = tree_height(root_rand)
+        d_r = avg_depth(root_rand)
+        h_o = tree_height(root_ord)
+        d_o = avg_depth(root_ord)
+        log_n = math.log2(n)
+        
+        print(f"{n:>7} | {h_r:>8} {d_r:>8.1f} | {h_o:>8} {d_o:>8.1f} | {log_n:>8.1f}")
+        
+        num_queries = min(n, 1000) 
+        queries = random_keys(num_queries, rng)
+        
+        t_rand = bench_search(root_rand, queries)
+        t_ord = bench_search(root_ord, queries)
+        
+        print(f"{'':>7} | Search Time: rand={t_rand:.5f}s  ord={t_ord:.5f}s")
+        print()
         # TODO: замерить bench_search для обоих деревьев на одинаковых
         #       запросах и включить сравнение времени в отчёт
     # TODO: построить графики h(n) для обоих потоков на фоне log2(n) и n
